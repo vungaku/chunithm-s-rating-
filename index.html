@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ja"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>カスタムスコア計算機 (CSVアップロード)</title> <!-- Tailwind CSS (モバイルフレンドリーなデザインのため) --> <script src="https://www.google.com/search?q=https://cdn.tailwindcss.com"></script> <!-- html2canvasライブラリ (画像化機能のため) --> <script src="https://www.google.com/search?q=https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script> <style> @import url('https://www.google.com/search?q=https://fonts.googleapis.com/css2%3Ffamily%3DInter:wght%40400%3B700%26display%3Dswap'); body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+    /* ランク表示のためのカスタムグラデーションスタイル */
+    .rank-k-9500 { /* k >= 9500: 虹 + 赤縁取り */
+        background-image: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+        color: white;
+        -webkit-text-stroke: 2px #ff0000; /* 赤の縁取り */
+        text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+    }
+    .rank-k-9000 { /* k >= 9000: 虹 */
+        background-image: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+        color: white;
+    }
+    .rank-k-8500 { /* k >= 8500: ペールオレンジと白 + 赤縁取り */
+        background-image: linear-gradient(to bottom right, #ffead3, #ffffff);
+        border: 4px solid #ff0000; /* 赤の縁取り */
+        color: #333;
+    }
+    .rank-k-8000 { /* k >= 8000: ペールオレンジと白 + 青縁取り */
+        background-image: linear-gradient(to bottom right, #ffead3, #ffffff);
+        border: 4px solid #0000ff; /* 青の縁取り */
+        color: #333;
+    }
+    .rank-k-7500 { /* k >= 7500: オレンジ/黄色/白 + 赤縁取り */
+        background-image: linear-gradient(to bottom right, #ffa500, #ffff00, #ffffff);
+        border: 4px solid #ff0000; /* 赤の縁取り */
+        color: #333;
+    }
+    .rank-k-7000 { /* k >= 7000: オレンジ/黄色 + 黒縁取り */
+        background-image: linear-gradient(to bottom right, #ffa500, #ffff00);
+        border: 4px solid #000000; /* 黒の縁取り */
+        color: #333;
+    }
+    .rank-k-6500 { /* k >= 6500: 水色と白 + 赤縁取り */
+        background-image: linear-gradient(to bottom right, #add8e6, #ffffff);
+        border: 4px solid #ff0000; /* 赤の縁取り */
+        color: #333;
+    }
+    .rank-k-6000 { /* k >= 6000: 水色と白 + 黒縁取り */
+        background-image: linear-gradient(to bottom right, #add8e6, #ffffff);
+        border: 4px solid #000000; /* 黒の縁取り */
+        color: #333;
+    }
+    .rank-k-5500 { /* k >= 5500: 茶色と白 + 赤縁取り */
+        background-image: linear-gradient(to bottom right, #d2b48c, #ffffff);
+        border: 4px solid #ff0000; /* 赤の縁取り */
+        color: #333;
+    }
+    .rank-k-5000 { /* k >= 5000: 茶色と白 + 黒縁取り */
+        background-image: linear-gradient(to bottom right, #d2b48c, #ffffff);
+        border: 4px solid #000000; /* 黒の縁取り */
+        color: #333;
+    }
+
+    /* 画像化エリアのスタイリング調整 */
+    #capture-area {
+        background-color: #ffffff; /* 画像背景を白に固定 */
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    #result-summary {
+        padding: 20px;
+        text-align: center;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        font-weight: bold;
+        font-size: 2.5rem; /* 大きく表示 */
+        margin-bottom: 20px;
+    }
+</style>
+
+
+</head> <body class="p-4 md:p-8">
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-gray-800 mb-4">カスタムスコア計算機</h1>
+    <p class="text-gray-600 mb-6">ChunirecからダウンロードしたCSVファイルを選択してください。</p>
+
+    <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
+        <input type="file" id="csv-file-input" accept=".csv" class="mb-4 block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none">
+        <button id="calculate-btn" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-150 ease-in-out font-semibold disabled:bg-gray-400">
+            計算実行
+        </button>
+        <p id="status-message" class="mt-3 text-center text-sm text-red-500"></p>
+    </div>
+
+    <button id="save-image-btn" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition duration-150 ease-in-out font-semibold disabled:bg-gray-400 mb-6 hidden">
+        ✨ 結果を画像として保存
+    </button>
+
+    <!-- 画像キャプチャ対象エリア -->
+    <div id="capture-area" class="bg-white rounded-xl shadow-lg min-h-[100px] overflow-x-auto">
+        <!-- 結果がここに表示される -->
+        <div id="results-container" class="p-5">
+            <p class="text-gray-500 text-center">CSVファイルをアップロードして計算を実行してください。</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // CSVファイルの列インデックス定義 (0から始まる)
+    const COL_INDEX = {
+        TITLE: 0,       // Title (曲名)
+        CONST: 3,       // Const (定数)
+        SCORE: 4,       // Score (スコア)
+        AJ_STATUS: 7,   // All Justice (AJ状況: 1/0)
+    };
+
+    const calculateBtn = document.getElementById('calculate-btn');
+    const fileInput = document.getElementById('csv-file-input');
+    const statusMessage = document.getElementById('status-message');
+    const resultsContainer = document.getElementById('results-container');
+    const saveImageBtn = document.getElementById('save-image-btn');
+
+    /**
+     * カスタム値の計算ロジック
+     * @param {number} score - 譜面スコア (1000000以上)
+     * @param {number} constant - 譜面定数 (14.0以上)
+     * @param {number} p - AJ達成状況 (1=AJ達成, 0=未達成)
+     * @returns {number} カスタム値
+     */
+    function calculateCustomValue(score, constant, p) {
+        if (score < 1000000) return 0.0;
+
+        const S = score;
+        const C = constant;
+        const t = C - 14;
+        const s = S - 1000000;
+
+        // **新しい最上位スコア帯 s=10000 (1,010,000点) の例外式を最優先**
+        if (s === 10000) {
+            return 100 * t + 21;
+        }
+
+        // 新しい最上位スコア帯 s > 9900 (1,009,900点超)
+        if (s > 9900) {
+            return (95 + 5 * p) * t + 10 + (s - 9900) / 10;
+        }
+
+        // 従来の最上位スコア帯 s > 9700 (1,009,700点超)
+        if (s > 9700) {
+            const baseRate = 95 + 5 * p;
+            return (baseRate * t) + ((s - 9700) / 20);
+        }
+
+        // 従来のスコア帯 s > 9000 (1,009,000点超)
+        if (s > 9000) {
+            const rateRange = 7.5 + 5 * p;
+            const baseRate = 87.5;
+            const scoreDiff = s - 9000;
+            const rate = baseRate + (scoreDiff * rateRange / 700);
+            return rate * t;
+        }
+
+        // 従来のスコア帯 s > 7500 (1,007,500点超)
+        if (s > 7500) {
+            const baseRate = 75;
+            const scoreDiff = s - 7500;
+            const rate = baseRate + (12.5 * scoreDiff / 1500);
+            return rate * t;
+        }
+
+        // 従来のスコア帯 s > 5000 (1,005,000点超)
+        if (s > 5000) {
+            return (75 * t) * ((s - 5000) / 2500);
+        }
+        
+        return 0.0;
+    }
+
+    /**
+     * CSVファイルを解析し、計算と表示を行うメイン処理
+     * @param {string} csvText - CSVファイルの全テキスト
+     */
+    function parseAndCalculate(csvText) {
+        const lines = csvText.trim().split('\n');
+        if (lines.length <= 1) {
+            statusMessage.textContent = 'CSVファイルにデータが見つかりません。';
+            return;
+        }
+
+        // ヘッダー行をスキップ
+        const records = lines.slice(1);
+        let allScores = [];
+
+        for (const line of records) {
+            // CSVパーサー（簡易版: カンマ区切り、ダブルクォーテーション対応）
+            const values = [];
+            let inQuote = false;
+            let current = '';
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuote = !inQuote;
+                } else if (char === ',' && !inQuote) {
+                    values.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            values.push(current.trim()); // 最後の要素を追加
+
+            try {
+                const constantStr = values[COL_INDEX.CONST];
+                const scoreStr = values[COL_INDEX.SCORE].replace(/,/g, '');
+                const ajStatusStr = values[COL_INDEX.AJ_STATUS];
+                
+                const constant = parseFloat(constantStr);
+                const score = parseInt(scoreStr, 10);
+                const isAj = ajStatusStr === '1'; // '1'がAJ達成
+
+                // フィルタリング: 定数 15.0 以上の譜面のみを対象とする
+                if (isNaN(constant) || constant < 15.0) {
+                    continue;
+                }
+
+                // P値の決定: AJ達成なら1, 未達成なら0
+                const pValue = isAj ? 1 : 0;
+                
+                const customValue = calculateCustomValue(score, constant, pValue);
+
+                // レベル表示名の決定
+                let displayLevel = values[COL_INDEX.LEVEL] || constant.toFixed(1);
+                if (constant >= 15.5) {
+                    displayLevel = '15+';
+                } else if (constant >= 15.0) {
+                    displayLevel = '15';
+                }
+
+                allScores.push({
+                    song: values[COL_INDEX.TITLE],
+                    level: displayLevel,
+                    constant: constant,
+                    score: score,
+                    ajStatus: isAj ? 'AJ' : '', // AJ達成時のみ'AJ'と表示
+                    customValue: customValue
+                });
+
+            } catch (e) {
+                console.error("行の解析中にエラーが発生しました:", line, e);
+                // エラーのある行はスキップ
+                continue;
+            }
+        }
+
+        // 'customValue'が大きい順にソート
+        allScores.sort((a, b) => b.customValue - a.customValue);
+        
+        const top60 = allScores.slice(0, 60);
+        const totalValue = top60.reduce((sum, item) => sum + item.customValue, 0);
+
+        // 結果の表示を更新
+        displayResults(totalValue, top60);
+    }
+
+    /**
+     * 結果の表示をHTMLにレンダリング
+     * @param {number} totalValue - 合計カスタム値
+     * @param {Array<Object>} top60 - 上位60譜面のデータ
+     */
+    function displayResults(totalValue, top60) {
+        resultsContainer.innerHTML = '';
+        
+        const roundedTotal = parseFloat(totalValue.toFixed(4));
+        
+        // ランククラスの決定ロジック
+        let rankClass = 'bg-gray-200 text-gray-800'; // デフォルト
+        if (roundedTotal >= 9500) {
+            rankClass = 'rank-k-9500';
+        } else if (roundedTotal >= 9000) {
+            rankClass = 'rank-k-9000';
+        } else if (roundedTotal >= 8500) {
+            rankClass = 'rank-k-8500';
+        } else if (roundedTotal >= 8000) {
+            rankClass = 'rank-k-8000';
+        } else if (roundedTotal >= 7500) {
+            rankClass = 'rank-k-7500';
+        } else if (roundedTotal >= 7000) {
+            rankClass = 'rank-k-7000';
+        } else if (roundedTotal >= 6500) {
+            rankClass = 'rank-k-6500';
+        } else if (roundedTotal >= 6000) {
+            rankClass = 'rank-k-6000';
+        } else if (roundedTotal >= 5500) {
+            rankClass = 'rank-k-5500';
+        } else if (roundedTotal >= 5000) {
+            rankClass = 'rank-k-5000';
+        }
+        
+        // 1. 合計値のサマリー表示 (キャプチャ対象)
+        const summaryHtml = `
+            <div id="result-summary" class="${rankClass} text-center p-6 rounded-xl shadow-2xl transition duration-500">
+                <h2 class="text-xl font-light">カスタム値 合計 (上位60曲)</h2>
+                <p class="mt-2 text-5xl font-extrabold tracking-tight">${roundedTotal.toFixed(4)}</p>
+                <p class="text-sm mt-3 text-gray-700">対象譜面: ${top60.length}曲 / 全${top60.length < 60 ? top60.length : '77+'}曲</p>
+            </div>
+        `;
+        resultsContainer.innerHTML += summaryHtml;
+
+        // 2. 上位60譜面の一覧テーブル (キャプチャ対象)
+        let tableHtml = `<div class="mt-8">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-3">上位60譜面一覧</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 shadow-md rounded-lg">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">曲名</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">定数</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lv.</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">スコア</th>
+                            <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">AJ</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">カスタム値</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+        `;
+        
+        top60.forEach((item, index) => {
+            const ajClass = item.ajStatus === 'AJ' ? 'text-green-600 font-bold' : 'text-gray-400';
+            tableHtml += `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${index + 1}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${item.song}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700">${item.constant.toFixed(1)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700">${item.level}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700">${item.score.toLocaleString()}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-center ${ajClass}">${item.ajStatus}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm font-semibold text-blue-600">${item.customValue.toFixed(4)}</td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `</tbody></table></div></div>`;
+        resultsContainer.innerHTML += tableHtml;
+        
+        // 画像保存ボタンを表示
+        saveImageBtn.classList.remove('hidden');
+    }
+
+    // --- イベントリスナー ---
+
+    calculateBtn.addEventListener('click', () => {
+        const file = fileInput.files[0];
+        if (!file) {
+            statusMessage.textContent = 'CSVファイルを選択してください。';
+            return;
+        }
+
+        statusMessage.textContent = '計算中です...';
+        calculateBtn.disabled = true;
+        saveImageBtn.classList.add('hidden');
+        
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            try {
+                parseAndCalculate(e.target.result);
+                statusMessage.textContent = '計算完了！';
+            } catch (error) {
+                statusMessage.textContent = 'ファイルの解析中にエラーが発生しました。CSVファイルの内容を確認してください。';
+                console.error("解析エラー:", error);
+            } finally {
+                calculateBtn.disabled = false;
+            }
+        };
+
+        // ユーザーから提供されたCSVがUTF-8であることを確認済み
+        reader.readAsText(file, 'UTF-8');
+    });
+
+    // 画像として保存機能
+    saveImageBtn.addEventListener('click', () => {
+        const captureArea = document.getElementById('capture-area');
+        
+        // スクロールバーを一時的に非表示にして、画像に含めないようにする
+        captureArea.style.overflow = 'hidden';
+
+        // html2canvasを実行
+        html2canvas(captureArea, {
+            scale: 2, // 高解像度でキャプチャ
+            useCORS: true,
+            backgroundColor: '#ffffff' // 背景色を白に固定
+        }).then(canvas => {
+            // キャンバスをPNG画像データに変換
+            const imageURL = canvas.toDataURL('image/png');
+            
+            // ダウンロード用のリンクを作成し、自動クリック
+            const a = document.createElement('a');
+            a.href = imageURL;
+            a.download = 'custom_score_report.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            // スクロールバーを元に戻す
+            captureArea.style.overflow = 'auto';
+            statusMessage.textContent = '画像をダウンロードしました！';
+            setTimeout(() => { statusMessage.textContent = ''; }, 3000);
+        }).catch(error => {
+            statusMessage.textContent = '画像の生成中にエラーが発生しました。';
+            console.error("画像化エラー:", error);
+            captureArea.style.overflow = 'auto'; // エラー時も戻す
+        });
+    });
+
+</script>
+
+
+</body> </html>
