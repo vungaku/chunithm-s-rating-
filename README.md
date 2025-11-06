@@ -1,0 +1,2 @@
+# chunithm-s-rating-
+チュウニズム
